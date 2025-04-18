@@ -89,8 +89,9 @@
   </section>
 
   <script>
-    let saldo = 0;
     const endpoint = "https://script.google.com/macros/s/AKfycbxR-2dfSWeVRiK-FsFy72CCjQP_PlZo7Cb4dN23UbZzhOD2w78NgTo_27874p4Rcxmi/exec";
+
+    let saldo = 0;
 
     document.getElementById("meseCorrente").textContent = "Mese corrente: " + new Date().toLocaleString('it-IT', { month: 'long', year: 'numeric' });
 
@@ -106,7 +107,7 @@
         method: "POST",
         body: JSON.stringify(dati),
         headers: { "Content-Type": "application/json" }
-      }).then(r => r.text()).then(console.log);
+      });
     }
 
     function impostaSaldo() {
@@ -140,7 +141,6 @@
       document.getElementById('listaSpese').appendChild(div);
 
       inviaASheet("Spese", { Data: new Date().toLocaleDateString(), Descrizione: descrizione, Importo: importo, Persona: persona });
-      inviaASheet("Saldo", { Data: new Date().toLocaleDateString(), Tipo: "Spesa", Importo: importo });
 
       document.getElementById('descrizioneSpesa').value = '';
       document.getElementById('importoSpesa').value = '';
@@ -162,31 +162,24 @@
       document.getElementById('dataScadenza').value = '';
     }
 
-    function caricaSaldoDaSheet() {
-      fetch(`${endpoint}?sheet=Saldo`)
-        .then(response => response.json())
-        .then(data => {
-          let totale = 0;
-          data.forEach(riga => {
-            const importo = parseFloat(riga.Importo) || 0;
-            if (riga.Tipo === "Iniziale") {
-              totale = importo;
-            } else if (riga.Tipo === "Aggiunta") {
-              totale += importo;
-            } else if (riga.Tipo === "Spesa") {
-              totale -= importo;
-            }
-          });
-          saldo = totale;
-          aggiornaSaldo();
-        })
-        .catch(error => {
-          console.error("Errore nel recupero del saldo:", error);
-        });
+    async function caricaSaldoDaGoogleSheet() {
+      const resSaldo = await fetch(`${endpoint}?sheet=Saldo`);
+      const datiSaldo = await resSaldo.json();
+      const saldoTotale = datiSaldo.reduce((tot, r) => {
+        const val = parseFloat(r.Importo) || 0;
+        return r.Tipo === "Iniziale" || r.Tipo === "Aggiunta" ? tot + val : tot;
+      }, 0);
+
+      const resSpese = await fetch(`${endpoint}?sheet=Spese`);
+      const datiSpese = await resSpese.json();
+      const totaleSpese = datiSpese.reduce((tot, r) => tot + (parseFloat(r.Importo) || 0), 0);
+
+      saldo = saldoTotale - totaleSpese;
+      aggiornaSaldo();
     }
 
-    // Avvia caricamento iniziale
-    caricaSaldoDaSheet();
+    // carica saldo da Google Sheet appena la pagina si apre
+    window.onload = caricaSaldoDaGoogleSheet;
   </script>
 
 </body>
