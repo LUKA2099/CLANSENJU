@@ -89,8 +89,8 @@
   </section>
 
   <script>
+    const endpoint = "https://script.google.com/macros/s/AKfycbxR-2dfSWeVRiK-FsFy72CCjQP_PlZo7Cb4dN23UbZzhOD2w78NgTo_27874p4Rcxmi/exec";
     let saldo = 0;
-    const endpoint = "https://script.google.com/macros/s/15-j_LRygRVpH8SArzsF0fZa1ldTWT8QoKltdCC9smj0/exec";
 
     document.getElementById("meseCorrente").textContent = "Mese corrente: " + new Date().toLocaleString('it-IT', { month: 'long', year: 'numeric' });
 
@@ -111,16 +111,18 @@
 
     function impostaSaldo() {
       const input = parseFloat(document.getElementById('saldoIniziale').value) || 0;
+      const oggi = new Date().toLocaleDateString();
+      inviaASheet("Saldo", { Data: oggi, Tipo: "Iniziale", Importo: input });
       saldo = input;
       aggiornaSaldo();
-      inviaASheet("Saldo", { Data: new Date().toLocaleDateString(), Tipo: "Iniziale", Importo: input });
     }
 
     function aggiungiAlSaldo() {
       const input = parseFloat(document.getElementById('aggiuntaSaldo').value) || 0;
+      const oggi = new Date().toLocaleDateString();
+      inviaASheet("Saldo", { Data: oggi, Tipo: "Aggiunta", Importo: input });
       saldo += input;
       aggiornaSaldo();
-      inviaASheet("Saldo", { Data: new Date().toLocaleDateString(), Tipo: "Aggiunta", Importo: input });
       document.getElementById('aggiuntaSaldo').value = '';
     }
 
@@ -128,9 +130,10 @@
       const descrizione = document.getElementById('descrizioneSpesa').value;
       const importo = parseFloat(document.getElementById('importoSpesa').value);
       const persona = document.getElementById('personaSpesa').value;
-
       if (!descrizione || isNaN(importo)) return;
+      const oggi = new Date().toLocaleDateString();
 
+      inviaASheet("Spese", { Data: oggi, Descrizione: descrizione, Importo: importo, Persona: persona });
       saldo -= importo;
       aggiornaSaldo();
 
@@ -138,8 +141,6 @@
       div.className = 'spesa';
       div.textContent = `${descrizione} (da ${persona}): -€${importo.toFixed(2)}`;
       document.getElementById('listaSpese').appendChild(div);
-
-      inviaASheet("Spese", { Data: new Date().toLocaleDateString(), Descrizione: descrizione, Importo: importo, Persona: persona });
 
       document.getElementById('descrizioneSpesa').value = '';
       document.getElementById('importoSpesa').value = '';
@@ -150,18 +151,48 @@
       const data = document.getElementById('dataScadenza').value;
       if (!descrizione || !data) return;
 
+      inviaASheet("Scadenze", { Data: new Date().toLocaleDateString(), Descrizione: descrizione, Scadenza: data });
+
       const div = document.createElement('div');
       div.className = 'scadenza';
       div.textContent = `${descrizione} – Scade il ${data}`;
       document.getElementById('listaScadenze').appendChild(div);
 
-      inviaASheet("Scadenze", { Data: new Date().toLocaleDateString(), Descrizione: descrizione, Scadenza: data });
-
       document.getElementById('descrizioneScadenza').value = '';
       document.getElementById('dataScadenza').value = '';
     }
+
+    async function caricaDati() {
+      const [saldoResponse, speseResponse] = await Promise.all([
+        fetch(`${endpoint}?sheet=Saldo`),
+        fetch(`${endpoint}?sheet=Spese`)
+      ]);
+      const saldoData = await saldoResponse.json();
+      const speseData = await speseResponse.json();
+
+      let totaleSaldo = 0;
+      saldoData.forEach(r => {
+        if (r.Tipo === "Iniziale" || r.Tipo === "Aggiunta") {
+          totaleSaldo += parseFloat(r.Importo);
+        }
+      });
+
+      speseData.forEach(r => {
+        totaleSaldo -= parseFloat(r.Importo);
+        const div = document.createElement('div');
+        div.className = 'spesa';
+        div.textContent = `${r.Descrizione} (da ${r.Persona}): -€${parseFloat(r.Importo).toFixed(2)}`;
+        document.getElementById('listaSpese').appendChild(div);
+      });
+
+      saldo = totaleSaldo;
+      aggiornaSaldo();
+    }
+
+    window.onload = caricaDati;
   </script>
 
 </body>
 </html>
+
 
