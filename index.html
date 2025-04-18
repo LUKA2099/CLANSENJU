@@ -1,186 +1,101 @@
 <!DOCTYPE html>
 <html lang="it">
 <head>
-  <meta charset="UTF-8">
-  <title>Gestione Spese Mensili</title>
-  <style>
-    body {
-      font-family: Arial, sans-serif;
-      background-color: #f4f4f4;
-      padding: 20px;
-      max-width: 800px;
-      margin: auto;
-    }
-    h1, h2 {
-      text-align: center;
-      color: #333;
-    }
-    section {
-      background: #fff;
-      padding: 15px;
-      margin-bottom: 20px;
-      border-radius: 10px;
-      box-shadow: 0 2px 5px rgba(0,0,0,0.1);
-    }
-    input, button, select {
-      padding: 8px;
-      margin: 5px 0;
-      width: 100%;
-      box-sizing: border-box;
-    }
-    .spesa, .scadenza {
-      border-bottom: 1px solid #ccc;
-      padding: 5px 0;
-    }
-    .totale {
-      font-weight: bold;
-      color: green;
-    }
-    .negativo {
-      color: red;
-    }
-  </style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gestione Saldo</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            background-color: #f4f4f9;
+        }
+        .container {
+            text-align: center;
+            background-color: #fff;
+            padding: 20px;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+            border-radius: 8px;
+            width: 300px;
+        }
+        input[type="number"], input[type="text"] {
+            width: 80%;
+            padding: 8px;
+            margin: 10px 0;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        button {
+            background-color: #4CAF50;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            width: 100%;
+            font-size: 16px;
+        }
+        button:hover {
+            background-color: #45a049;
+        }
+    </style>
 </head>
 <body>
 
-  <h1>💸 Gestione Spese Mensili</h1>
-  <h2 id="meseCorrente"></h2>
+    <div class="container">
+        <h2>Gestione Saldo</h2>
+        <label for="saldo">Saldo:</label>
+        <input type="number" id="saldo" placeholder="Inserisci saldo" />
+        <button onclick="impostaSaldo()">Aggiungi al Saldo</button>
+    </div>
 
-  <section>
-    <h2>Saldo Iniziale</h2>
-    <input type="number" id="saldoIniziale" placeholder="Inserisci saldo iniziale">
-    <button onclick="impostaSaldo()">Imposta saldo</button>
-  </section>
+    <script>
+        // Funzione per inviare i dati al foglio Google
+        async function inviaASheet(dati, sheetName) {
+            try {
+                const response = await fetch(`https://script.google.com/macros/s/AKfycbwGtTN6T3gd1ksBavv2BdEJ1byy_tpOgaeDTeicmpc7U-px_0nYbOL7kJyxE0xM612N/exec?sheet=${sheetName}`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(dati)
+                });
 
-  <section>
-    <h2>Aggiungi al Saldo</h2>
-    <input type="number" id="aggiuntaSaldo" placeholder="Importo da aggiungere">
-    <button onclick="aggiungiAlSaldo()">Aggiungi</button>
-  </section>
+                // Controlliamo la risposta
+                const text = await response.text();
+                try {
+                    // Se la risposta è JSON
+                    const jsonResponse = JSON.parse(text);
+                    console.log('Dati inviati correttamente', jsonResponse);
+                } catch (e) {
+                    // Se non è JSON, è probabile che sia un errore
+                    console.error('Errore nel server:', text);
+                }
+            } catch (error) {
+                console.error('Errore nella richiesta fetch:', error);
+            }
+        }
 
-  <section>
-    <h2>Saldo Attuale</h2>
-    <p>Saldo attuale: <span id="saldoAttuale">€0.00</span></p>
-  </section>
-
-  <section>
-    <h2>Aggiungi Spesa</h2>
-    <input type="text" id="descrizioneSpesa" placeholder="Descrizione">
-    <input type="number" id="importoSpesa" placeholder="Importo">
-    <select id="personaSpesa">
-      <option value="Gianluca">Gianluca</option>
-      <option value="Valentina">Valentina</option>
-    </select>
-    <button onclick="aggiungiSpesa()">Aggiungi spesa</button>
-    <div id="listaSpese"></div>
-  </section>
-
-  <section>
-    <h2>Pagamenti in Scadenza</h2>
-    <input type="text" id="descrizioneScadenza" placeholder="Descrizione pagamento">
-    <input type="date" id="dataScadenza">
-    <button onclick="aggiungiScadenza()">Aggiungi pagamento</button>
-    <div id="listaScadenze"></div>
-  </section>
-
-  <section>
-    <h2>Saldo Finale</h2>
-    <p class="totale" id="saldoFinale">€0.00</p>
-  </section>
-
-  <script>
-    const endpoint = "https://script.google.com/macros/s/AKfycbzI3eG4bh2DACF55PDOI2u9q9nL5WKpPFJsflS2QxqXNqTLH4p-aE8tz1WPW88lmBwb/exec";
-
-    let saldo = 0;
-
-    document.getElementById("meseCorrente").textContent = "Mese corrente: " + new Date().toLocaleString('it-IT', { month: 'long', year: 'numeric' });
-
-    function aggiornaSaldo() {
-      document.getElementById('saldoAttuale').textContent = `€${saldo.toFixed(2)}`;
-      const finale = document.getElementById('saldoFinale');
-      finale.textContent = `€${saldo.toFixed(2)}`;
-      finale.className = saldo < 0 ? 'totale negativo' : 'totale';
-    }
-
-    function inviaASheet(foglio, dati) {
-      fetch(`${endpoint}?sheet=${foglio}`, {
-        method: "POST",
-        body: JSON.stringify(dati),
-        headers: { "Content-Type": "application/json" }
-      });
-    }
-
-    function impostaSaldo() {
-      const input = parseFloat(document.getElementById('saldoIniziale').value) || 0;
-      saldo = input;
-      aggiornaSaldo();
-      inviaASheet("Saldo", { Data: new Date().toLocaleDateString(), Tipo: "Iniziale", Importo: input });
-    }
-
-    function aggiungiAlSaldo() {
-      const input = parseFloat(document.getElementById('aggiuntaSaldo').value) || 0;
-      saldo += input;
-      aggiornaSaldo();
-      inviaASheet("Saldo", { Data: new Date().toLocaleDateString(), Tipo: "Aggiunta", Importo: input });
-      document.getElementById('aggiuntaSaldo').value = '';
-    }
-
-    function aggiungiSpesa() {
-      const descrizione = document.getElementById('descrizioneSpesa').value;
-      const importo = parseFloat(document.getElementById('importoSpesa').value);
-      const persona = document.getElementById('personaSpesa').value;
-
-      if (!descrizione || isNaN(importo)) return;
-
-      saldo -= importo;
-      aggiornaSaldo();
-
-      const div = document.createElement('div');
-      div.className = 'spesa';
-      div.textContent = `${descrizione} (da ${persona}): -€${importo.toFixed(2)}`;
-      document.getElementById('listaSpese').appendChild(div);
-
-      inviaASheet("Spese", { Data: new Date().toLocaleDateString(), Descrizione: descrizione, Importo: importo, Persona: persona });
-
-      document.getElementById('descrizioneSpesa').value = '';
-      document.getElementById('importoSpesa').value = '';
-    }
-
-    function aggiungiScadenza() {
-      const descrizione = document.getElementById('descrizioneScadenza').value;
-      const data = document.getElementById('dataScadenza').value;
-      if (!descrizione || !data) return;
-
-      const div = document.createElement('div');
-      div.className = 'scadenza';
-      div.textContent = `${descrizione} – Scade il ${data}`;
-      document.getElementById('listaScadenze').appendChild(div);
-
-      inviaASheet("Scadenze", { Data: new Date().toLocaleDateString(), Descrizione: descrizione, Scadenza: data });
-
-      document.getElementById('descrizioneScadenza').value = '';
-      document.getElementById('dataScadenza').value = '';
-    }
-
-    async function caricaSaldoDaGoogleSheet() {
-      const resSaldo = await fetch(`${endpoint}?sheet=Saldo`);
-      const datiSaldo = await resSaldo.json();
-      const saldoTotale = datiSaldo.reduce((tot, r) => {
-        const val = parseFloat(r.Importo) || 0;
-        return r.Tipo === "Iniziale" || r.Tipo === "Aggiunta" ? tot + val : tot;
-      }, 0);
-
-      const resSpese = await fetch(`${endpoint}?sheet=Spese`);
-      const datiSpese = await resSpese.json();
-      const totaleSpese = datiSpese.reduce((tot, r) => tot + (parseFloat(r.Importo) || 0), 0);
-
-      saldo = saldoTotale - totaleSpese;
-      aggiornaSaldo();
-    }
-
-    // carica saldo da Google Sheet appena la pagina si apre
-    window.onload = caricaSaldoDaGoogleSheet;
-  </script>
+        // Funzione per inviare il saldo
+        function impostaSaldo() {
+            const saldo = document.getElementById("saldo").value;  // Ottieni il saldo dal campo input
+            if (saldo) {
+                const dati = {
+                    "Cliente": "Nome Cliente",  // Sostituisci con il nome cliente se necessario
+                    "Saldo": saldo
+                };
+                inviaASheet(dati, 'Saldo');  // Chiamata al foglio 'Saldo'
+                alert("Saldo aggiornato!");
+            } else {
+                alert("Per favore, inserisci un saldo.");
+            }
+        }
+    </script>
 
 </body>
 </html>
