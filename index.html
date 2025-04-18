@@ -89,8 +89,8 @@
   </section>
 
   <script>
-    const endpoint = "https://script.google.com/macros/s/AKfycby-jAwaQyB4Dc_5oVWwDEwytuGjKiorb4gUhNUPtLU/dev";
     let saldo = 0;
+    const endpoint = "https://script.google.com/macros/s/AKfycbxR-2dfSWeVRiK-FsFy72CCjQP_PlZo7Cb4dN23UbZzhOD2w78NgTo_27874p4Rcxmi/exec";
 
     document.getElementById("meseCorrente").textContent = "Mese corrente: " + new Date().toLocaleString('it-IT', { month: 'long', year: 'numeric' });
 
@@ -106,23 +106,21 @@
         method: "POST",
         body: JSON.stringify(dati),
         headers: { "Content-Type": "application/json" }
-      });
+      }).then(r => r.text()).then(console.log);
     }
 
     function impostaSaldo() {
       const input = parseFloat(document.getElementById('saldoIniziale').value) || 0;
-      const oggi = new Date().toLocaleDateString();
-      inviaASheet("Saldo", { Data: oggi, Tipo: "Iniziale", Importo: input });
       saldo = input;
       aggiornaSaldo();
+      inviaASheet("Saldo", { Data: new Date().toLocaleDateString(), Tipo: "Iniziale", Importo: input });
     }
 
     function aggiungiAlSaldo() {
       const input = parseFloat(document.getElementById('aggiuntaSaldo').value) || 0;
-      const oggi = new Date().toLocaleDateString();
-      inviaASheet("Saldo", { Data: oggi, Tipo: "Aggiunta", Importo: input });
       saldo += input;
       aggiornaSaldo();
+      inviaASheet("Saldo", { Data: new Date().toLocaleDateString(), Tipo: "Aggiunta", Importo: input });
       document.getElementById('aggiuntaSaldo').value = '';
     }
 
@@ -130,10 +128,9 @@
       const descrizione = document.getElementById('descrizioneSpesa').value;
       const importo = parseFloat(document.getElementById('importoSpesa').value);
       const persona = document.getElementById('personaSpesa').value;
-      if (!descrizione || isNaN(importo)) return;
-      const oggi = new Date().toLocaleDateString();
 
-      inviaASheet("Spese", { Data: oggi, Descrizione: descrizione, Importo: importo, Persona: persona });
+      if (!descrizione || isNaN(importo)) return;
+
       saldo -= importo;
       aggiornaSaldo();
 
@@ -141,6 +138,9 @@
       div.className = 'spesa';
       div.textContent = `${descrizione} (da ${persona}): -€${importo.toFixed(2)}`;
       document.getElementById('listaSpese').appendChild(div);
+
+      inviaASheet("Spese", { Data: new Date().toLocaleDateString(), Descrizione: descrizione, Importo: importo, Persona: persona });
+      inviaASheet("Saldo", { Data: new Date().toLocaleDateString(), Tipo: "Spesa", Importo: importo });
 
       document.getElementById('descrizioneSpesa').value = '';
       document.getElementById('importoSpesa').value = '';
@@ -151,48 +151,43 @@
       const data = document.getElementById('dataScadenza').value;
       if (!descrizione || !data) return;
 
-      inviaASheet("Scadenze", { Data: new Date().toLocaleDateString(), Descrizione: descrizione, Scadenza: data });
-
       const div = document.createElement('div');
       div.className = 'scadenza';
       div.textContent = `${descrizione} – Scade il ${data}`;
       document.getElementById('listaScadenze').appendChild(div);
 
+      inviaASheet("Scadenze", { Data: new Date().toLocaleDateString(), Descrizione: descrizione, Scadenza: data });
+
       document.getElementById('descrizioneScadenza').value = '';
       document.getElementById('dataScadenza').value = '';
     }
 
-    async function caricaDati() {
-      const [saldoResponse, speseResponse] = await Promise.all([
-        fetch(`${endpoint}?sheet=Saldo`),
-        fetch(`${endpoint}?sheet=Spese`)
-      ]);
-      const saldoData = await saldoResponse.json();
-      const speseData = await speseResponse.json();
-
-      let totaleSaldo = 0;
-      saldoData.forEach(r => {
-        if (r.Tipo === "Iniziale" || r.Tipo === "Aggiunta") {
-          totaleSaldo += parseFloat(r.Importo);
-        }
-      });
-
-      speseData.forEach(r => {
-        totaleSaldo -= parseFloat(r.Importo);
-        const div = document.createElement('div');
-        div.className = 'spesa';
-        div.textContent = `${r.Descrizione} (da ${r.Persona}): -€${parseFloat(r.Importo).toFixed(2)}`;
-        document.getElementById('listaSpese').appendChild(div);
-      });
-
-      saldo = totaleSaldo;
-      aggiornaSaldo();
+    function caricaSaldoDaSheet() {
+      fetch(`${endpoint}?sheet=Saldo`)
+        .then(response => response.json())
+        .then(data => {
+          let totale = 0;
+          data.forEach(riga => {
+            const importo = parseFloat(riga.Importo) || 0;
+            if (riga.Tipo === "Iniziale") {
+              totale = importo;
+            } else if (riga.Tipo === "Aggiunta") {
+              totale += importo;
+            } else if (riga.Tipo === "Spesa") {
+              totale -= importo;
+            }
+          });
+          saldo = totale;
+          aggiornaSaldo();
+        })
+        .catch(error => {
+          console.error("Errore nel recupero del saldo:", error);
+        });
     }
 
-    window.onload = caricaDati;
+    // Avvia caricamento iniziale
+    caricaSaldoDaSheet();
   </script>
 
 </body>
 </html>
-
-
